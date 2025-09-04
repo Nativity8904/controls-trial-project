@@ -1,7 +1,13 @@
 #include <Wire.h>
 
-const int BAUDRATE = 19200;
+const int BAUDRATE = 9600;
 const int MPUADDR = 0x68;
+
+constexpr uint8_t DLPFCONFIG = 4; 
+constexpr uint8_t GYROCONFIG = 0x10;
+constexpr uint8_t ACCELEROMETERCONFIG = 0x00; 
+
+int16_t gyro_xout;
 
 void setup() {
   // Start I2C Master
@@ -13,21 +19,44 @@ void setup() {
   Wire.beginTransmission(MPUADDR);
   Wire.write(0x6B);
   Wire.write(0x00);
-  Wire.endTransmission();
+  Wire.endTransmission(true);
 
-  // Create I2C frame
+  // Change DLPF Config
   Wire.beginTransmission(MPUADDR);
-  Wire.write(0x75);
-  Wire.endTransmission(false);
+  Wire.write(0x1A);
+  Wire.write(DLPFCONFIG);
+  Wire.endTransmission(true);
 
-  // Request 1 byte from the MPU-6050 WHO_AM_I register
-  Wire.requestFrom(MPUADDR, 1);
+  // Change Gyro Config
+  Wire.beginTransmission(MPUADDR);
+  Wire.write(0x1B);
+  Wire.write(GYROCONFIG);
+  Wire.endTransmission(true);
 
-  // Read I2C data from request and print whoami
-  uint8_t whoami = Wire.read();
-  Serial.print(whoami, HEX);
+  // Change Accelerometer Config
+  Wire.beginTransmission(MPUADDR);
+  Wire.write(0x1C);
+  Wire.write(ACCELEROMETERCONFIG);
+  Wire.endTransmission(true);
+
 }
 
 void loop() {
 
+  // Read gyroscope sensors
+  Wire.beginTransmission(MPUADDR);
+  Wire.write(0x43);
+  Wire.endTransmission(false);
+
+  Wire.requestFrom(MPUADDR, 2);
+
+  uint8_t xh = Wire.read(), xl = Wire.read();
+
+  gyro_xout = (int16_t)((xh << 8) | xl);
+
+  float scale = 32.8f;
+  Serial.print(gyro_xout / scale, 2);
+  Serial.print("\n");
+
+  delay(100);
 }

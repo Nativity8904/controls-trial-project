@@ -1,13 +1,11 @@
 #include <Wire.h>
 
-const int BAUDRATE = 9600;
-const int MPUADDR = 0x68;
+constexpr int BAUDRATE = 9600;
+constexpr int MPUADDR = 0x68;
 
-constexpr uint8_t DLPFCONFIG = 4; 
-constexpr uint8_t GYROCONFIG = 0x10;
-constexpr uint8_t ACCELEROMETERCONFIG = 0x00; 
+constexpr uint8_t ACCEL_CONFIG = 0x00; 
 
-int16_t gyro_xout;
+constexpr float AFS_SEL = 16384.0f;
 
 void setup() {
   // Start I2C Master
@@ -21,42 +19,47 @@ void setup() {
   Wire.write(0x00);
   Wire.endTransmission(true);
 
-  // Change DLPF Config
-  Wire.beginTransmission(MPUADDR);
-  Wire.write(0x1A);
-  Wire.write(DLPFCONFIG);
-  Wire.endTransmission(true);
-
-  // Change Gyro Config
-  Wire.beginTransmission(MPUADDR);
-  Wire.write(0x1B);
-  Wire.write(GYROCONFIG);
-  Wire.endTransmission(true);
-
   // Change Accelerometer Config
   Wire.beginTransmission(MPUADDR);
   Wire.write(0x1C);
-  Wire.write(ACCELEROMETERCONFIG);
+  Wire.write(ACCEL_CONFIG);
   Wire.endTransmission(true);
 
 }
 
 void loop() {
 
-  // Read gyroscope sensors
+  // Read accel sensors
   Wire.beginTransmission(MPUADDR);
-  Wire.write(0x43);
+  Wire.write(0x3B); // Address of accel_xout_h
   Wire.endTransmission(false);
 
-  Wire.requestFrom(MPUADDR, 2);
+  // Request next 6 bytes from MPU (full accel values)
+  Wire.requestFrom(MPUADDR, 6);
 
-  uint8_t xh = Wire.read(), xl = Wire.read();
+  // Read accel values from memory
+  uint8_t accel_xout_h = Wire.read(), accel_xout_l = Wire.read();
+  uint8_t accel_yout_h = Wire.read(), accel_yout_l = Wire.read();
+  uint8_t accel_zout_h = Wire.read(), accel_zout_l = Wire.read();
 
-  gyro_xout = (int16_t)((xh << 8) | xl);
+  // Combine high and low values
+  int16_t accel_xout_raw = ((int16_t)((accel_xout_h << 8) | accel_xout_l));
+  int16_t accel_yout_raw = ((int16_t)((accel_yout_h << 8) | accel_yout_l));
+  int16_t accel_zout_raw = ((int16_t)((accel_zout_h << 8) | accel_zout_l));
+  
+  // Convert to in terms of g
+  float accel_xout = accel_xout_raw / AFS_SEL;
+  float accel_yout = accel_yout_raw / AFS_SEL;
+  float accel_zout = accel_zout_raw / AFS_SEL;
 
-  float scale = 32.8f;
-  Serial.print(gyro_xout / scale, 2);
-  Serial.print("\n");
+  Serial.print("Accel_xout: ");
+  Serial.println(accel_xout, 5);
+
+  Serial.print("Accel_yout: ");
+  Serial.println(accel_yout, 5);
+
+  Serial.print("Accel_zout: ");
+  Serial.println(accel_zout, 5);
 
   delay(100);
 }

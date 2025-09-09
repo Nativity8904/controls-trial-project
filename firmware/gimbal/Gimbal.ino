@@ -11,6 +11,8 @@ constexpr float AFS_SEL = 16384.0f;
 Servo servo;
 constexpr int SERVO_PIN = 3;
 
+int servo_angle_offset;
+
 void setup() {
   // Start I2C master
   Serial.begin(BAUDRATE);
@@ -53,14 +55,22 @@ void loop() {
   int16_t accel_zout_raw = ((int16_t)((accel_zout_h << 8) | accel_zout_l));
   
   // Convert to in terms of g
-  float accel_xout = accel_xout_raw / AFS_SEL;
-  float accel_yout = accel_yout_raw / AFS_SEL;
+  double accel_xout = accel_xout_raw / AFS_SEL;
+  double accel_yout = accel_yout_raw / AFS_SEL;
   float accel_zout = accel_zout_raw / AFS_SEL;
 
-  float angle = (atanf(accel_yout / accel_xout)) * (float)(180/3.1415926535);
+  float angle = (atan2f(accel_yout, accel_xout)) * (float)(180/3.1415926535);
 
   // Convert the angle to {0, 180}
   int servo_angle = (int)(angle) + 90;
+
+  // Offset
+  if (Serial.available()) {
+    servo_angle_offset = Serial.parseInt();
+  }
+  servo_angle += servo_angle_offset;
+
+  servo.write(servo_angle);
 
   // Print relevant values
   Serial.print("accel_xout: ");
@@ -72,8 +82,6 @@ void loop() {
   Serial.print("servo_angle: ");
   Serial.print(servo_angle);
   Serial.print("\n");
-
-  servo.write(servo_angle);
 
   delay(100);
 }

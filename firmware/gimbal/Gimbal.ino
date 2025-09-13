@@ -13,23 +13,32 @@ constexpr int SERVO_PIN = 3;
 
 int servo_angle_offset;
 
+class I2C_Wrapper {
+  private:
+  int mpuaddr;
+
+  public:
+  I2C_Wrapper(int addr) : mpuaddr(addr) {}
+
+  void write(int location, int data) {
+    Wire.beginTransmission(mpuaddr);
+    Wire.write(location);
+    Wire.write(data);
+    Wire.endTransmission(true);
+  }
+
+};
+
 void setup() {
   // Start I2C master
   Serial.begin(BAUDRATE);
   Wire.begin();
   delay(100);
 
-  // Wake MPU-6050
-  Wire.beginTransmission(MPUADDR);
-  Wire.write(0x6B);
-  Wire.write(0x00);
-  Wire.endTransmission(true);
-
-  // Change accelerometer config
-  Wire.beginTransmission(MPUADDR);
-  Wire.write(0x1C);
-  Wire.write(ACCEL_CONFIG);
-  Wire.endTransmission(true);
+  I2C_Wrapper mpu(MPUADDR);
+  
+  mpu.write(0x6B, 0x00) // Wake MPU-6050
+  mpu.write(0x1C, ACCEL_CONFIG) // Change accelerometer config
 
   servo.attach(SERVO_PIN);
 }

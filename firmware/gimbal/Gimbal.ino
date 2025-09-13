@@ -19,10 +19,15 @@ class I2C_Wrapper {
 
   public:
   I2C_Wrapper(int addr) : mpuaddr(addr) {}
+  
+  enum MPU6050_Register : uint8_t {
+    PWR_MGMT_1 = 0x6B,
+    ACCEL_CONFIG = 0x1C
+  };
 
-  void write(int location, int data) {
+  void write(uint8_t address, uint8_t data) {
     Wire.beginTransmission(mpuaddr);
-    Wire.write(location);
+    Wire.write(address);
     Wire.write(data);
     Wire.endTransmission(true);
   }
@@ -37,8 +42,8 @@ void setup() {
 
   I2C_Wrapper mpu(MPUADDR);
   
-  mpu.write(0x6B, 0x00) // Wake MPU-6050
-  mpu.write(0x1C, ACCEL_CONFIG) // Change accelerometer config
+  mpu.write(I2C_Wrapper::PWR_MGMT_1, 0x00); // Wake MPU-6050
+  mpu.write(I2C_Wrapper::ACCEL_CONFIG, 0x00); // Change accelerometer config
 
   servo.attach(SERVO_PIN);
 }

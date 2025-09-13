@@ -6,12 +6,12 @@ constexpr int MPUADDR = 0x68;
 
 constexpr float AFS_SEL = 16384.0f;
 
-class I2C_Wrapper {
+class MPU6050 {
   private:
   int mpuaddr;
 
   public:
-  I2C_Wrapper(int address) : mpuaddr(address) {}
+  MPU6050(int address) : mpuaddr(address) {}
   
   enum MPU6050_Register : uint8_t {
     PWR_MGMT_1 = 0x6B,
@@ -52,18 +52,18 @@ void setup() {
   Wire.begin();
   delay(100);
 
-  I2C_Wrapper mpu(MPUADDR);
+  MPU6050 mpu(MPUADDR);
   
-  mpu.write(I2C_Wrapper::PWR_MGMT_1, 0x00); // Wake MPU-6050
-  mpu.write(I2C_Wrapper::ACCEL_CONFIG, 0x00); // Change accelerometer config
+  mpu.write(MPU6050::PWR_MGMT_1, 0x00); // Wake MPU-6050
+  mpu.write(MPU6050::ACCEL_CONFIG, 0x00); // Change accelerometer config
 
   servo.attach(SERVO_PIN);
 }
 
 void loop() {
-  I2C_Wrapper mpu(MPUADDR);
+  MPU6050 mpu(MPUADDR);
 
-  mpu.read(I2C_Wrapper::ACCEL_X_OUT_H, 4, accel_raw);
+  mpu.read(MPU6050::ACCEL_X_OUT_H, 4, accel_raw);
 
   // Combine high and low values
   int16_t accel_xout_raw = ((int16_t)((accel_raw[0] << 8) | accel_raw[1]));

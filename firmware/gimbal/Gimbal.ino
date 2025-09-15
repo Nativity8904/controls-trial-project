@@ -3,15 +3,20 @@
 
 constexpr int BAUDRATE = 9600;
 constexpr int MPUADDR = 0x68;
-
-constexpr float AFS_SEL = 16384.0f;
+constexpr int SERVO_PIN = 3;
 
 class MPU6050 {
   private:
-  int mpuaddr;
+  int mpuaddr_;
+  struct {
+    int16_t x;
+    int16_t y;
+    int16_t z;
+  } accel_;
 
   public:
-  MPU6050(int address) : mpuaddr(address) {}
+  MPU6050(int address) 
+    : mpuaddr_(address) {}
   
   enum MPU6050_Register : uint8_t {
     PWR_MGMT_1 = 0x6B,
@@ -19,32 +24,92 @@ class MPU6050 {
     ACCEL_X_OUT_H = 0x3B
   };
 
-  void write(uint8_t address, uint8_t data) {
-    Wire.beginTransmission(mpuaddr);
+  void Write(uint8_t address, uint8_t data) {
+    Wire.beginTransmission(mpuaddr_);
     Wire.write(address);
     Wire.write(data);
     Wire.endTransmission(true);
   }
 
-  void read(uint8_t address, size_t length, uint8_t* destination) {
-    Wire.beginTransmission(mpuaddr);
+  // Function that reads from an address to a certain length and outputs to an array.
+  void Read(uint8_t address, size_t length, uint8_t* destination) {
+    Wire.beginTransmission(mpuaddr_);
     Wire.write(address);
     Wire.endTransmission(false);
-    Wire.requestFrom(mpuaddr, length);
+    Wire.requestFrom(mpuaddr_, length);
     
     for (int n = 0; n < length; n++) {
       destination[n] = Wire.read();
     }
   }
 
+  void ReadAccel() {
+    uint8_t rawAccel[6];
+    Read(ACCEL_X_OUT_H, 6, rawAccel);
+    
+    accel_.x = ((int16_t)((rawAccel[0] << 8) | rawAccel[1]));
+    accel_.y = ((int16_t)((rawAccel[2] << 8) | rawAccel[3]));
+    accel_.z = ((int16_t)((rawAccel[4] << 8) | rawAccel[5]));
+  }
+
+  int16_t CurrentAccelX() {
+    return accel_.x;
+  }
+
+  int16_t CurrentAccelY() {
+    return accel_.y;
+  }
+
+  void PrintAccel() {
+    Serial.print("X_accel: ");
+    Serial.println(accel_.x);
+    Serial.print("Y_accel: ");
+    Serial.println(accel_.y);
+    Serial.print("Z_accel: ");
+    Serial.println(accel_.z);
+  }
+
 };
 
-Servo servo;
-constexpr int SERVO_PIN = 3;
+class Gimbal {
+  private:
+  uint8_t servo_pin_;
+  Servo servo_;
+  int offset_deg_;
+  int servo_angle_deg_;
 
-int servo_angle_offset;
+  public:
+  Gimbal(uint8_t servo_pin, int offset_deg = 0)
+    : servo_pin_(servo_pin), offset_deg_(offset_deg), servo_angle_deg_(90) {}
 
-uint8_t accel_raw[4]; 
+  void Attach() {
+    servo_.attach(servo_pin_);
+  }
+
+  void UpdateSensorAngleAccel(int16_t ax, int16_t ay) {
+    float angle = (atan2f((float)ay, (float)ax)) * 57.29746936f;
+    servo_angle_deg_ = (int)(angle) + 90 + offset_deg_;
+  }
+
+  void UpdateInputOffset(int new_offset_deg) {
+    offset_deg_ = (new_offset_deg) * (-1);
+  }
+  
+  void Write() {
+    servo_.write(servo_angle_deg_);
+  }
+
+  void PrintAngle() {
+    Serial.print("servo_angle: ");
+    Serial.print(servo_angle_deg_);
+    Serial.print("\n");
+  }
+
+};
+
+MPU6050 mpu(MPUADDR);
+
+Gimbal gimbal(SERVO_PIN, 0);
 
 void setup() {
   // Start I2C master
@@ -52,50 +117,26 @@ void setup() {
   Wire.begin();
   delay(100);
 
-  MPU6050 mpu(MPUADDR);
-  
-  mpu.write(MPU6050::PWR_MGMT_1, 0x00); // Wake MPU-6050
-  mpu.write(MPU6050::ACCEL_CONFIG, 0x00); // Change accelerometer config
+  mpu.Write(MPU6050::PWR_MGMT_1, 0x00); // Wake MPU-6050
+  mpu.Write(MPU6050::ACCEL_CONFIG, 0x00); // Change accelerometer config
 
-  servo.attach(SERVO_PIN);
-}
+  gimbal.Attach();
+};
 
-void loop() {
-  MPU6050 mpu(MPUADDR);
+void loop() { 
+  mpu.ReadAccel();
 
-  mpu.read(MPU6050::ACCEL_X_OUT_H, 4, accel_raw);
+  gimbal.UpdateSensorAngleAccel(mpu.CurrentAccelX(), mpu.CurrentAccelY());
 
-  // Combine high and low values
-  int16_t accel_xout_raw = ((int16_t)((accel_raw[0] << 8) | accel_raw[1]));
-  int16_t accel_yout_raw = ((int16_t)((accel_raw[2] << 8) | accel_raw[3]));
-  
-  // Convert to in terms of g
-  double accel_xout = accel_xout_raw / AFS_SEL;
-  double accel_yout = accel_yout_raw / AFS_SEL;
-
-  float angle = (atan2f(accel_yout, accel_xout)) * (float)(180/3.1415926535);
-
-  // Convert the angle to {0, 180}
-  int servo_angle = (int)(angle) + 90;
-
-  // Offset
   if (Serial.available()) {
-    servo_angle_offset = Serial.parseInt();
+    gimbal.UpdateInputOffset(Serial.parseInt());
   }
-  servo_angle += servo_angle_offset;
 
-  servo.write(servo_angle);
+  gimbal.Write();
 
-  // Print relevant values
-  Serial.print("accel_xout: ");
-  Serial.println(accel_xout);
-
-  Serial.print("accel_yout: ");
-  Serial.println(accel_yout);
-
-  Serial.print("servo_angle: ");
-  Serial.print(servo_angle);
-  Serial.print("\n");
+  mpu.PrintAccel();
+  gimbal.PrintAngle();
 
   delay(100);
+
 }
